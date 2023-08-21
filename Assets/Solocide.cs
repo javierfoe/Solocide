@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public class Solocide
 {
-    private List<Card> _deck = new (), _discard = new(), _enemies = new(), _hand = new();
+    private const int MaxHandSize = 8;
+    private List<Card> _deck = new (), _discard = new(), _enemies = new(), _hand = new(), _inPlay = new();
     private int _jesters;
 
     public Solocide(int jesters = 2)
@@ -11,6 +13,35 @@ public class Solocide
         _jesters = jesters;
         SetDeck();
         SetEnemies();
+    }
+
+    public void UseCards(List<int> cards)
+    {
+        foreach (var index in cards)
+        {
+            _inPlay.Add(_hand.RemoveElementAt(index));
+        }
+    }
+
+    public void DiscardCards()
+    {
+        _discard.AddRange(_inPlay);
+        _inPlay.Clear();
+    }
+
+    public void ShuffleCards(int amount)
+    {
+        var shuffle = Math.Min(_discard.Count, amount);
+        _discard.Randomize();
+        _deck.AddRange(_discard.RemoveElements(shuffle));
+    }
+
+    public List<Card> DrawCards(int amount)
+    {
+        var draw = Math.Min(Math.Min(MaxHandSize - _hand.Count, amount), _deck.Count);
+        var result = _deck.RemoveElements(draw);
+        _hand.AddRange(result);
+        return result;
     }
 
     private void SetDeck()
@@ -23,7 +54,7 @@ public class Solocide
                 aux.Add(new Card(special, i));
             }
         }
-        RandomizeList(aux, _deck);
+        aux.RandomizeListTo(_deck);
     }
 
     private void SetEnemies()
@@ -39,34 +70,17 @@ public class Solocide
                 new Card(SpecialAbility.DoubleDamage, i)
             };
             
-            RandomizeList(aux, _enemies);
+            aux.RandomizeListTo(_enemies);
         }
     }
 
-    private void RandomizeList<T>(List<T> origin, List<T> destination)
+    private static string EnumerableToString(IEnumerable<Card> cards)
     {
-        for (var i = origin.Count; i > 0; --i)
-        {
-            var index = UnityEngine.Random.Range(0, i);
-            destination.Add(origin[index]);
-            origin.RemoveAt(index);
-        }
+        return cards.Aggregate("", (current, card) => current + $"{card}\n");
     }
 
     public override string ToString()
     {
-        return $"Enemies\n{IEnumerableToString(_enemies)}Deck\n{IEnumerableToString(_deck)}";
-    }
-
-    private string IEnumerableToString(IEnumerable<Card> cards)
-    {
-        var result = "";
-        
-        foreach (Card card in cards)
-        {
-            result += $"{card}\n";
-        }
-
-        return result;
+        return $"Enemies\n{EnumerableToString(_enemies)}Deck\n{EnumerableToString(_deck)}";
     }
 }
