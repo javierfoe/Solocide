@@ -1,8 +1,9 @@
 using System;
+using System.Collections.Generic;
 
 public class Card
 {
-    public SpecialAbility SpecialAbility
+    public Element Element
     {
         get;
         private set;
@@ -13,25 +14,28 @@ public class Card
         get;
         private set;
     }
-
-    public int Health => DamageShielding * 2;
     
-    public Card(SpecialAbility specialAbility, int damageShielding)
+    public Card(Element element, int damageShielding)
     {
-        SpecialAbility = specialAbility;
+        Element = element;
         DamageShielding = damageShielding;
     }
 
     public override string ToString()
     {
-        return $"{DamageShielding}-{SpecialAbility}";
+        return $"{DamageShielding}-{Element}";
     }
-}
-    
-public enum SpecialAbility
-{
-    Shield,
-    DoubleDamage,
-    Shuffle,
-    Draw
+
+    public static Card CombineCards(List<Card> cards, Enemy enemy)
+    {
+        var elements = Element.None;
+        var damageShielding = 0;
+        foreach (var card in cards)
+        {
+            damageShielding += card.DamageShielding;
+            if (card.Element == enemy.Element) continue;
+            elements |= card.Element;
+        }
+        return new Card(elements, damageShielding);
+    }
 }

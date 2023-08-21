@@ -1,32 +1,106 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine.Events;
 
 public class Solocide
 {
-    private const int MaxHandSize = 8;
-    private List<Card> _deck = new (), _discard = new(), _enemies = new(), _hand = new(), _inPlay = new();
+    private const int MaxHandSize = 8, MaxComboCardStrength = 6, MaxComboStrength= 12;
+    private readonly List<Card> _deck = new (), _discard = new(), _enemies = new(), _hand = new(), _inPlay = new();
     private int _jesters;
+    private Enemy _currentEnemy;
 
+    public readonly UnityEvent<Card> AddCardToHandEvent = new();
+    public readonly UnityEvent<Enemy> UpdateEnemyCardEvent = new();
+    public readonly UnityEvent<int> RemoveCardFromHandEvent = new(), UpdateDeckCountEvent = new(), UpdateDiscardCountEvent = new(), UpdatePlayCountEvent = new(), UpdateJestersCountEvent = new();
+    public readonly UnityEvent ClearHandEvent = new();
+    
     public Solocide(int jesters = 2)
     {
         _jesters = jesters;
         SetDeck();
         SetEnemies();
+        FillHand();
     }
 
-    public void UseCards(List<int> cards)
+    public List<int> AvailableCardsAfterSelection(List<int> selectedCards)
     {
-        foreach (var index in cards)
+        var notSelectedCards = new List<int>();
+        for (var i = 0; i < _hand.Count; ++i)
         {
-            _inPlay.Add(_hand.RemoveElementAt(index));
+            if(selectedCards.Contains(i)) continue;
+            notSelectedCards.Add(i);
         }
+
+        var count = selectedCards.Count;
+        if (count == 0) return notSelectedCards;
+        Card card = null;
+        selectedCards.ForEach((element) =>
+        {
+            var aux = _hand[element];
+            if (aux.DamageShielding > 1)
+            {
+                card = aux;
+            }
+        });
+        if (count == 1 && card == null) return notSelectedCards;
+        var availableCards = new List<int>();
+        if (count == 2 && card == null) return availableCards;
+        var combinedCard = CombineCards(selectedCards);
+        if (card.DamageShielding < MaxComboCardStrength)
+        { 
+            if(combinedCard.DamageShielding < MaxComboStrength)
+            {
+                notSelectedCards.ForEach((notSelectedCard) =>
+                {
+                    if (_hand[notSelectedCard].DamageShielding + combinedCard.DamageShielding < MaxComboStrength)
+                    {
+                        availableCards.Add(notSelectedCard);
+                    }
+                });
+            }
+        }
+        else 
+        {
+            
+        }
+
+        return availableCards;
+    }
+
+    public void UseJester()
+    {
+        _discard.AddRange(_hand);
+        TriggerUpdateDiscardEvent();
+        
+        _hand.Clear();
+        ClearHandEvent.Invoke();
+        
+        FillHand();
+        
+        UpdateJestersCountEvent.Invoke(--_jesters);
+    }
+
+    public void AttackCards(List<int> cards)
+    {
+        var attackCard = CombineCards(cards);
+        PlayCards(attackCard);
+        TriggerUpdatePlayEvent();
+    }
+
+    public void DefenseCards(List<int> cards)
+    {
+        AddCardsPlay(cards);
+        DiscardCards();
+        TriggerUpdatePlayEvent();
     }
 
     public void DiscardCards()
     {
         _discard.AddRange(_inPlay);
         _inPlay.Clear();
+        TriggerUpdateDiscardEvent();
+        TriggerUpdatePlayEvent();
     }
 
     public void ShuffleCards(int amount)
@@ -34,24 +108,117 @@ public class Solocide
         var shuffle = Math.Min(_discard.Count, amount);
         _discard.Randomize();
         _deck.AddRange(_discard.RemoveElements(shuffle));
+        
+        TriggerUpdateDiscardEvent();
+        TriggerUpdateDeckEvent();
     }
 
-    public List<Card> DrawCards(int amount)
+    public void DrawCards(int amount)
     {
         var draw = Math.Min(Math.Min(MaxHandSize - _hand.Count, amount), _deck.Count);
-        var result = _deck.RemoveElements(draw);
-        _hand.AddRange(result);
-        return result;
+        var drawnCards = _deck.RemoveElements(draw);
+        _hand.AddRange(drawnCards);
+        
+        foreach (var card in drawnCards)
+        {
+            AddCardToHandEvent.Invoke(card);
+        }
+        TriggerUpdateDeckEvent();
+    }
+
+    private Card CombineCards(List<int> cards)
+    {
+        var currentUsedCards = AddCardsPlay(cards);
+        return Card.CombineCards(currentUsedCards, _currentEnemy);
+    }
+
+    private void FillHand()
+    {
+        DrawCards(MaxHandSize);
+    }
+
+    private void PlayCards(Card card)
+    {
+        var element = card.Element;
+        var damageShielding = card.DamageShielding;
+        
+        if (element.HasFlag(Element.Water))
+        {
+            ShuffleCards(damageShielding);
+        }
+
+        if (element.HasFlag(Element.Wind))
+        {
+            DrawCards(damageShielding);
+        }
+
+        var attackResult = _currentEnemy.Damage(damageShielding, element);
+        TriggerUpdateEnemyCardEvent();
+
+        switch (attackResult)
+        {
+            case Attack.Alive:
+                return;
+            case Attack.Dead:
+                _inPlay.Add(_currentEnemy);
+                break;
+            case Attack.Recruit:
+                _deck.Insert(0, _currentEnemy);
+                break;
+        }
+
+        DiscardCards();
+        
+        _enemies.RemoveAt(0);
+        SetNewEnemy();
+    }
+
+    private List<Card> AddCardsPlay(List<int> cards)
+    {
+        var currentUsedCards = new List<Card>();
+        foreach (var index in cards)
+        {
+            currentUsedCards.Add(RemoveCardFromHand(index));
+        }
+        _inPlay.AddRange(currentUsedCards);
+        return currentUsedCards;
+    }
+
+    private Card RemoveCardFromHand(int index)
+    {
+        RemoveCardFromHandEvent.Invoke(index);
+        return _hand.RemoveElementAt(index);
+    }
+
+    private void TriggerUpdateDeckEvent()
+    {
+        UpdateDeckCountEvent.Invoke(_deck.Count);
+    }
+
+    private void TriggerUpdateDiscardEvent()
+    {
+        UpdateDiscardCountEvent.Invoke(_discard.Count);
+    }
+
+    private void TriggerUpdatePlayEvent()
+    {
+        UpdatePlayCountEvent.Invoke(_inPlay.Count);
+    }
+
+    private void TriggerUpdateEnemyCardEvent()
+    {
+        UpdateEnemyCardEvent.Invoke(_currentEnemy);
     }
 
     private void SetDeck()
     {
         var aux = new List<Card>();
-        foreach (SpecialAbility special in Enum.GetValues(typeof(SpecialAbility)))
+        foreach (Element element in Enum.GetValues(typeof(Element)))
         {
+            if(element == Element.None) continue;
             for (var i = 1; i < 11; ++i)
             {
-                aux.Add(new Card(special, i));
+                aux.Add(new Card(element, i));
             }
         }
         aux.RandomizeListTo(_deck);
@@ -59,24 +226,35 @@ public class Solocide
 
     private void SetEnemies()
     {
-        List<Card> aux;
         for (var i = 10; i < 21; i += 5)
         {
-            aux = new()
+            List<Card> aux = new()
             {
-                new Card(SpecialAbility.Draw, i),
-                new Card(SpecialAbility.Shield, i),
-                new Card(SpecialAbility.Shuffle, i),
-                new Card(SpecialAbility.DoubleDamage, i)
+                new Card(Element.Wind, i),
+                new Card(Element.Earth, i),
+                new Card(Element.Water, i),
+                new Card(Element.Fire, i)
             };
-            
+
             aux.RandomizeListTo(_enemies);
         }
+        SetNewEnemy();
+    }
+
+    private void SetNewEnemy()
+    {
+        _currentEnemy = new Enemy(_enemies[0]);
+        TriggerUpdateEnemyCardEvent();
     }
 
     private static string EnumerableToString(IEnumerable<Card> cards)
     {
         return cards.Aggregate("", (current, card) => current + $"{card}\n");
+    }
+
+    public string CurrentState()
+    {
+        return $"CurrentEnemy: {_currentEnemy}\n\nHand:\n{EnumerableToString(_hand)}\nEnemies:{_enemies.Count}\nDeck:{_deck.Count}\nDiscard:{_discard.Count}";
     }
 
     public override string ToString()
