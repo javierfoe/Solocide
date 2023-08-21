@@ -16,7 +16,7 @@ public class Solocide
     private void SetDeck()
     {
         var aux = new List<Card>();
-        foreach (Special special in Enum.GetValues(typeof(Special)))
+        foreach (SpecialAbility special in Enum.GetValues(typeof(SpecialAbility)))
         {
             for (var i = 1; i < 11; ++i)
             {
@@ -33,10 +33,10 @@ public class Solocide
         {
             aux = new()
             {
-                new Card(Special.Draw, i),
-                new Card(Special.Shield, i),
-                new Card(Special.Shuffle, i),
-                new Card(Special.DoubleDamage, i)
+                new Card(SpecialAbility.Draw, i),
+                new Card(SpecialAbility.Shield, i),
+                new Card(SpecialAbility.Shuffle, i),
+                new Card(SpecialAbility.DoubleDamage, i)
             };
             
             RandomizeList(aux, _enemies);
@@ -51,5 +51,22 @@ public class Solocide
             destination.Add(origin[index]);
             origin.RemoveAt(index);
         }
+    }
+
+    public override string ToString()
+    {
+        return $"Enemies\n{IEnumerableToString(_enemies)}Deck\n{IEnumerableToString(_deck)}";
+    }
+
+    private string IEnumerableToString(IEnumerable<Card> cards)
+    {
+        var result = "";
+        
+        foreach (Card card in cards)
+        {
+            result += $"{card}\n";
+        }
+
+        return result;
     }
 }

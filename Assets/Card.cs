@@ -1,6 +1,8 @@
+using System;
+
 public class Card
 {
-    public Special Special
+    public SpecialAbility SpecialAbility
     {
         get;
         private set;
@@ -14,14 +16,19 @@ public class Card
 
     public int Health => DamageShielding * 2;
     
-    public Card(Special special, int damageShielding)
+    public Card(SpecialAbility specialAbility, int damageShielding)
     {
-        Special = special;
+        SpecialAbility = specialAbility;
         DamageShielding = damageShielding;
+    }
+
+    public override string ToString()
+    {
+        return $"{DamageShielding}-{SpecialAbility}";
     }
 }
     
-public enum Special
+public enum SpecialAbility
 {
     Shield,
     DoubleDamage,
