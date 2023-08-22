@@ -1,18 +1,39 @@
-using System;
 using System.Collections.Generic;
 
 public class Card
 {
+    private bool _selected, _available;
     public Element Element
     {
         get;
-        private set;
     }
 
     public int DamageShielding
     {
         get;
-        private set;
+    }
+
+    public bool Selected
+    {
+        get => _selected;
+        set
+        {
+            _selected = value;
+            if (value)
+            {
+                _available = true;
+            }
+        }
+    }
+
+    public bool Available
+    {
+        get => _available;
+        set
+        {
+            if (_selected) return;
+            _available = value;
+        }
     }
     
     public Card(Element element, int damageShielding)
@@ -23,7 +44,7 @@ public class Card
 
     public override string ToString()
     {
-        return $"{DamageShielding}-{Element}";
+        return $"{(Available ? "(Available)" : "")} {DamageShielding}-{Element} {(Selected ? "(Selected)" : "")}";
     }
 
     public static Card CombineCards(List<Card> cards, Enemy enemy)

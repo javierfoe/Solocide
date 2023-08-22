@@ -27,4 +27,9 @@
         Strength -= element.HasFlag(Element.Earth) ? damage : 0;
         return Health < 0 ? Attack.Dead : Health > 0 ? Attack.Alive : Attack.Recruit;
     }
+    
+    public override string ToString()
+    {
+        return $"{Health}-{Strength}-{Element}";
+    }
 }

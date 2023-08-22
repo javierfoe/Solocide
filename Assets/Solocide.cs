@@ -2,17 +2,19 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine.Events;
+using UnityEngine.XR;
 
 public class Solocide
 {
     private const int MaxHandSize = 8, MaxComboCardStrength = 6, MaxComboStrength= 12;
-    private readonly List<Card> _deck = new (), _discard = new(), _enemies = new(), _hand = new(), _inPlay = new();
+    private readonly List<Card> _deck = new (), _discard = new(), _enemies = new(), _hand = new(), _inPlay = new(), _selectedCards = new();
     private int _jesters;
     private Enemy _currentEnemy;
 
     public readonly UnityEvent<Card> AddCardToHandEvent = new();
     public readonly UnityEvent<Enemy> UpdateEnemyCardEvent = new();
     public readonly UnityEvent<int> RemoveCardFromHandEvent = new(), UpdateDeckCountEvent = new(), UpdateDiscardCountEvent = new(), UpdatePlayCountEvent = new(), UpdateJestersCountEvent = new();
+    public readonly UnityEvent<int, Card> UpdateHandCardEvent = new();
     public readonly UnityEvent ClearHandEvent = new();
     
     public Solocide(int jesters = 2)
@@ -23,49 +25,47 @@ public class Solocide
         FillHand();
     }
 
-    public List<int> AvailableCardsAfterSelection(List<int> selectedCards)
+    public void AvailableCardsAfterSelection()
     {
-        var notSelectedCards = new List<int>();
-        for (var i = 0; i < _hand.Count; ++i)
-        {
-            if(selectedCards.Contains(i)) continue;
-            notSelectedCards.Add(i);
-        }
+        var notSelectedCards = _hand.FindAll((card) => !card.Selected);
 
-        var count = selectedCards.Count;
-        if (count == 0) return notSelectedCards;
-        Card card = null;
-        selectedCards.ForEach((element) =>
+        var count = _selectedCards.Count;
+        if (count == 0) return;
+        var card = _selectedCards.Find((card) => card.DamageShielding > 1);
+        if (count == 1 && card == null)
         {
-            var aux = _hand[element];
-            if (aux.DamageShielding > 1)
-            {
-                card = aux;
-            }
-        });
-        if (count == 1 && card == null) return notSelectedCards;
-        var availableCards = new List<int>();
-        if (count == 2 && card == null) return availableCards;
-        var combinedCard = CombineCards(selectedCards);
+            SetAvailabilityCards(notSelectedCards, true);
+            return;
+        }
+        if (count == 2 && card == null)
+        {
+            SetAvailabilityAllCards(false);
+            return;
+        }
+        
+        var combinedCard = CombineCards(_selectedCards);
         if (card.DamageShielding < MaxComboCardStrength)
         { 
             if(combinedCard.DamageShielding < MaxComboStrength)
             {
                 notSelectedCards.ForEach((notSelectedCard) =>
                 {
-                    if (_hand[notSelectedCard].DamageShielding + combinedCard.DamageShielding < MaxComboStrength)
+                    if (notSelectedCard.DamageShielding + combinedCard.DamageShielding < MaxComboStrength)
                     {
-                        availableCards.Add(notSelectedCard);
+                        SetAvailabilityCard(notSelectedCard, true);
                     }
                 });
             }
         }
-        else 
+        else switch (count)
         {
-            
+            case 1:
+                notSelectedCards.ForEach((notSelectedCard) => SetAvailabilityCard(notSelectedCard, notSelectedCard.DamageShielding == 1));
+                break;
+            case 2:
+                SetAvailabilityCards(notSelectedCards, false);
+                break;
         }
-
-        return availableCards;
     }
 
     public void UseJester()
@@ -126,10 +126,31 @@ public class Solocide
         TriggerUpdateDeckEvent();
     }
 
+    private void SetAvailabilityCard(Card card, bool availability)
+    {
+        card.Available = availability;
+        TriggerUpdateHandCardEvent(card);
+    }
+
+    private void SetAvailabilityCards(List<Card> cards, bool availability)
+    {
+        cards.ForEach((card) => SetAvailabilityCard(card, availability));
+    }
+
+    private void SetAvailabilityAllCards(bool availability)
+    {
+        SetAvailabilityCards(_hand, availability);
+    }
+
     private Card CombineCards(List<int> cards)
     {
         var currentUsedCards = AddCardsPlay(cards);
-        return Card.CombineCards(currentUsedCards, _currentEnemy);
+        return CombineCards(currentUsedCards);
+    }
+
+    private Card CombineCards(List<Card> cards)
+    {
+        return Card.CombineCards(cards, _currentEnemy);
     }
 
     private void FillHand()
@@ -208,6 +229,11 @@ public class Solocide
     private void TriggerUpdateEnemyCardEvent()
     {
         UpdateEnemyCardEvent.Invoke(_currentEnemy);
+    }
+
+    private void TriggerUpdateHandCardEvent(Card card)
+    {
+        UpdateHandCardEvent.Invoke(_hand.IndexOf(card), card);
     }
 
     private void SetDeck()
